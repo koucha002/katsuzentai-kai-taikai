@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>勝つぜん大会集計アプリ</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:1000px;margin:auto;padding:20px;background:#f5f5f5;color:#222}
+h1{margin-bottom:6px}.card{background:white;padding:16px;border-radius:14px;margin:14px 0;box-shadow:0 2px 8px #0001}
+input,select,button{font-size:16px;padding:9px;margin:4px;border-radius:8px;border:1px solid #bbb}
+button{cursor:pointer;background:#222;color:white}.danger{background:#a22}.muted{color:#666}
+table{border-collapse:collapse;width:100%;margin-top:10px}th,td{border:1px solid #ddd;padding:8px;text-align:center}th{background:#eee}
+.rank{font-weight:bold}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+</style>
+</head>
+<body>
+<h1>🏆 勝つぜん大会集計アプリ</h1>
+<p class="muted">VRChat大会の参加者・ゲーム結果・個人ポイントを自動集計します。</p>
+
+<div class="card">
+<h2>参加者</h2>
+<input id="name" placeholder="参加者名">
+<button onclick="addPlayer()">追加</button>
+<button onclick="shuffleTeams()">チームをシャッフル</button>
+<div id="players"></div>
+</div>
+
+<div class="card">
+<h2>ゲーム結果入力</h2>
+<div class="grid">
+<label>ゲーム<select id="game"></select></label>
+<label>参加者<select id="player"></select></label>
+<label>ポイント<input id="points" type="number" value="1" min="0"></label>
+</div>
+<button onclick="addScore()">ポイントを追加</button>
+<p class="muted">チーム戦では、同じチームのメンバー全員に同じポイントを追加できます。</p>
+<div class="grid">
+<label>チーム<select id="team"></select></label>
+<label>チームポイント<input id="teamPoints" type="number" value="5" min="0"></label>
+</div>
+<button onclick="addTeamScore()">チーム全員に加算</button>
+</div>
+
+<div class="card">
+<h2>現在の順位</h2>
+<div id="ranking"></div>
+</div>
+
+<div class="card">
+<h2>データ</h2>
+<button onclick="downloadData()">バックアップ保存</button>
+<input type="file" id="file" accept=".json" onchange="loadData(event)">
+<button class="danger" onclick="resetAll()">全データ削除</button>
+</div>
+
+<script>
+const games=["Gigas","漢字間違い探し","Black Knockers","VERTEX:VRC","フレンド理解度チェック","紙飛行機バトル"];
+let data=JSON.parse(localStorage.getItem("katsuzenData")||'{"players":[],"scores":[]}');
+
+function save(){localStorage.setItem("katsuzenData",JSON.stringify(data));render();}
+function addPlayer(){
+ const n=document.getElementById("name").value.trim(); if(!n)return;
+ if(data.players.some(p=>p.name===n)) return alert("同じ名前があります");
+ data.players.push({name:n,team:"A"}); document.getElementById("name").value=""; save();
+}
+function shuffleTeams(){
+ const a=[...data.players].sort(()=>Math.random()-0.5);
+ const teams=["A","B","C","D"];
+ a.forEach((p,i)=>p.team=teams[i%Math.min(teams.length,Math.max(2,Math.ceil(a.length/5)))]);
+ save();
+}
+function addScore(){
+ const name=document.getElementById("player").value, game=document.getElementById("game").value;
+ const pts=Number(document.getElementById("points").value)||0;
+ if(!name)return; data.scores.push({name,game,pts}); save();
+}
+function addTeamScore(){
+ const team=document.getElementById("team").value, game=document.getElementById("game").value;
+ const pts=Number(document.getElementById("teamPoints").value)||0;
+ data.players.filter(p=>p.team===team).forEach(p=>data.scores.push({name:p.name,game,pts}));
+ save();
+}
+function render(){
+ document.getElementById("players").innerHTML=data.players.map(p=>`${p.name}（チーム${p.team}）`).join("　")||"まだ参加者がいません";
+ const gs=document.getElementById("game"), ps=document.getElementById("player"), ts=document.getElementById("team");
+ gs.innerHTML=games.map(g=>`<option>${g}</option>`).join("");
+ ps.innerHTML=data.players.map(p=>`<option>${p.name}</option>`).join("");
+ const used=[...new Set(data.players.map(p=>p.team))];
+ ts.innerHTML=used.map(t=>`<option>${t}</option>`).join("");
+ const totals={}; data.players.forEach(p=>totals[p.name]=0);
+ data.scores.forEach(s=>totals[s.name]=(totals[s.name]||0)+s.pts);
+ const rows=Object.entries(totals).sort((a,b)=>b[1]-a[1]).map((x,i)=>`<tr><td>${i+1}</td><td>${x[0]}</td><td>${data.players.find(p=>p.name===x[0])?.team||""}</td><td>${x[1]}</td></tr>`).join("");
+ document.getElementById("ranking").innerHTML=`<table><tr><th>順位</th><th>名前</th><th>チーム</th><th>合計</th></tr>${rows}</table>`;
+}
+function downloadData(){
+ const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="勝つぜん大会集計_バックアップ.json";a.click();
+}
+function loadData(e){
+ const f=e.target.files[0]; if(!f)return;
+ const r=new FileReader();r.onload=()=>{try{data=JSON.parse(r.result);save()}catch{alert("読み込み失敗")}};r.readAsText(f);
+}
+function resetAll(){if(confirm("本当に全データを削除しますか？")){data={players:[],scores:[]};save()}}
+render();
+</script>
+</body>
+</html>
